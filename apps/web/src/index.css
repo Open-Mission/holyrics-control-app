@@ -14,6 +14,7 @@
     BlinkMacSystemFont,
     sans-serif;
   color-scheme: light;
+  --page-glow: oklch(0.98 0.01 180);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -108,7 +109,7 @@ body {
   margin: 0;
   color: var(--foreground);
   background:
-    linear-gradient(180deg, oklch(0.98 0.01 180) 0%, transparent 34rem), var(--background);
+    linear-gradient(180deg, var(--page-glow) 0%, transparent 34rem), var(--background);
 }
 
 button,
@@ -117,6 +118,8 @@ a {
 }
 
 .dark {
+  color-scheme: dark;
+  --page-glow: oklch(0.205 0.025 224 / 70%);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

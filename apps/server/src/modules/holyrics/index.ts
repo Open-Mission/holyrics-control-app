@@ -10,6 +10,13 @@ import {
   resolveHolyricsConfig,
   saveLocalHolyricsConfig
 } from "./config.js";
+import {
+  getHolyricsMediaPlaylist,
+  getHolyricsSongDetail,
+  goToPresentationIndex,
+  presentMediaPlaylistItem,
+  presentSong
+} from "../playlist/service.js";
 
 type HolyricsTokenInfoResponse = {
   status?: unknown;
@@ -28,6 +35,31 @@ function isSaveConfigRequest(body: unknown): body is SaveHolyricsConfigRequest {
   const request = body as Partial<SaveHolyricsConfigRequest>;
 
   return typeof request.baseUrl === "string" && typeof request.token === "string";
+}
+
+function hasStringId(body: unknown): body is { id: string } {
+  return typeof body === "object" && body !== null && typeof (body as { id?: unknown }).id === "string";
+}
+
+function isPresentSongRequest(body: unknown): body is { id: string; initialIndex?: number } {
+  if (!hasStringId(body)) {
+    return false;
+  }
+
+  const initialIndex = (body as { initialIndex?: unknown }).initialIndex;
+  return (
+    initialIndex === undefined ||
+    (typeof initialIndex === "number" && Number.isInteger(initialIndex) && initialIndex >= 0)
+  );
+}
+
+function isGoToIndexRequest(body: unknown): body is { index: number } {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    Number.isInteger((body as { index?: unknown }).index) &&
+    Number((body as { index?: unknown }).index) >= 0
+  );
 }
 
 function errorMessage(error: unknown) {
@@ -93,6 +125,61 @@ export const holyricsRoutes: FastifyPluginAsync = async (app) => {
     } catch (error) {
       const statusCode = errorMessage(error).startsWith("Configure") ? 409 : 502;
       return reply.code(statusCode).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get("/media-playlist", async (_request, reply) => {
+    try {
+      return await getHolyricsMediaPlaylist();
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { name?: string } }>("/songs/:id", async (request, reply) => {
+    try {
+      return await getHolyricsSongDetail(request.params.id, request.query.name);
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/media-playlist/present", async (request, reply) => {
+    if (!hasStringId(request.body)) {
+      return reply.code(400).send({ error: "Informe o ID do item da playlist." });
+    }
+
+    try {
+      await presentMediaPlaylistItem(request.body.id);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/songs/present", async (request, reply) => {
+    if (!isPresentSongRequest(request.body)) {
+      return reply.code(400).send({ error: "Informe o ID da musica e um indice inicial valido." });
+    }
+
+    try {
+      await presentSong(request.body.id, request.body.initialIndex ?? 0);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/presentation/goto-index", async (request, reply) => {
+    if (!isGoToIndexRequest(request.body)) {
+      return reply.code(400).send({ error: "Informe um indice de slide valido." });
+    }
+
+    try {
+      await goToPresentationIndex(request.body.index);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
     }
   });
 };
