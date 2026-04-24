@@ -1,4 +1,4 @@
-import { CalendarClock, FileX2, ListMusic, Music2, Play, RefreshCw } from "lucide-react";
+import { CalendarClock, FileX2, ImageIcon, ListMusic, Music2, Play, RefreshCw } from "lucide-react";
 
 import type { HolyricsMediaPlaylistItem, HolyricsMediaPlaylistResponse } from "@holyrics-control/shared";
 
@@ -13,6 +13,7 @@ type MediaPlaylistPanelProps = {
   onRefresh: () => void;
   onPresent: (item: HolyricsMediaPlaylistItem) => void;
   onOpenSong: (item: HolyricsMediaPlaylistItem) => void;
+  onOpenImage: (item: HolyricsMediaPlaylistItem) => void;
 };
 
 function formatScheduleDate(value: string | null) {
@@ -46,7 +47,8 @@ export function MediaPlaylistPanel({
   error,
   onRefresh,
   onPresent,
-  onOpenSong
+  onOpenSong,
+  onOpenImage
 }: MediaPlaylistPanelProps) {
   const hasItems = Boolean(playlist?.items.some((item) => item.type !== "title"));
 
@@ -103,12 +105,18 @@ export function MediaPlaylistPanel({
                 {group.items.map((item) => (
                   <div className="flex items-center gap-3 p-3" key={`${item.id}-${item.index}`}>
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      <Music2 className="size-4" />
+                      {item.type === "image" ? <ImageIcon className="size-4" /> : <Music2 className="size-4" />}
                     </div>
                     <button
                       className="min-w-0 flex-1 text-left"
                       onClick={() =>
-                        item.type === "song" ? onOpenSong(item) : item.executable ? onPresent(item) : undefined
+                        item.type === "song"
+                          ? onOpenSong(item)
+                          : item.type === "image"
+                            ? onOpenImage(item)
+                            : item.executable
+                              ? onPresent(item)
+                              : undefined
                       }
                       type="button"
                     >
@@ -117,7 +125,7 @@ export function MediaPlaylistPanel({
                         <ItemBadge type={item.type} />
                       </div>
                     </button>
-                    {item.executable ? (
+                    {item.executable && item.type !== "song" && item.type !== "image" ? (
                       <Button onClick={() => onPresent(item)} size="icon-sm" type="button" variant="outline">
                         <Play className="size-4" />
                         <span className="sr-only">Apresentar {item.name}</span>

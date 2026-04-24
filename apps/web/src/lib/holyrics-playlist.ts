@@ -82,6 +82,11 @@ export async function stopHolyricsPresentation(fetcher: typeof fetch = fetch) {
   await postJson("/api/holyrics/presentation/stop", {}, fetcher);
 }
 
+export async function getCurrentSlide(fetcher: typeof fetch = fetch) {
+  const response = await fetcher("/api/holyrics/presentation/current-slide");
+  return readJsonResponse<{ slide: number | null }>(response);
+}
+
 export function getSongPresentationIndex(sectionIndex: number) {
   return sectionIndex;
 }

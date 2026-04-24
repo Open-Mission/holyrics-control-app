@@ -411,6 +411,16 @@ export async function goToPresentationIndex(index: number, options: HolyricsPlay
   await getExecutor(options)("ActionGoToIndex", { index });
 }
 
+export async function getCurrentSlideNumber(options: HolyricsPlaylistServiceOptions = {}): Promise<number | null> {
+  const raw = (await getExecutor(options)("GetCurrentPresentation", {})) as RawCurrentPresentation | null;
+
+  if (!raw || typeof raw.slide_number !== "number") {
+    return null;
+  }
+
+  return raw.slide_number - 1;
+}
+
 export async function stopPresentation(options: HolyricsPlaylistServiceOptions = {}) {
   await getExecutor(options)("CloseCurrentPresentation", {});
 }

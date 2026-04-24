@@ -15,6 +15,7 @@ import {
   getHolyricsImagePresentation,
   getHolyricsSongDetail,
   goToPresentationIndex,
+  getCurrentSlideNumber,
   presentMediaPlaylistItem,
   presentSong,
   stopPresentation
@@ -201,6 +202,15 @@ export const holyricsRoutes: FastifyPluginAsync = async (app) => {
     try {
       await stopPresentation();
       return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get("/presentation/current-slide", async (_request, reply) => {
+    try {
+      const slide = await getCurrentSlideNumber();
+      return { slide };
     } catch (error) {
       return reply.code(502).send({ error: errorMessage(error) });
     }
