@@ -13,12 +13,13 @@ import type {
 } from "@holyrics-control/shared";
 
 import { HolyricsConnectionIndicator } from "@/components/HolyricsConnectionIndicator";
-import { ImagePresentationSheet } from "@/components/ImagePresentationSheet";
+import { ImagePresentationPanel } from "@/components/ImagePresentationPanel";
 import { MediaPlaylistPanel } from "@/components/MediaPlaylistPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { PresentationConfirmDialog } from "@/components/PresentationConfirmDialog";
-import { SongSectionsSheet } from "@/components/SongSectionsSheet";
-import { VideoPresentationSheet } from "@/components/VideoPresentationSheet";
+import { SongSectionsPanel } from "@/components/SongSectionsPanel";
+import { useSubScreen } from "@/components/sub-screen-context";
+import { VideoPresentationPanel } from "@/components/VideoPresentationPanel";
 import {
   fetchCurrentPresentationState,
   fetchHolyricsMediaDetail,
@@ -45,6 +46,8 @@ function getErrorMessage(error: unknown) {
 }
 
 export function ServicePage() {
+  const { openSubScreen, closeSubScreen } = useSubScreen();
+
   const [playlist, setPlaylist] = useState<HolyricsMediaPlaylistResponse | null>(null);
   const [playlistLoading, setPlaylistLoading] = useState(true);
   const [playlistError, setPlaylistError] = useState<string | null>(null);
@@ -187,6 +190,8 @@ export function ServicePage() {
     setSongPresentationActive(false);
     setOptimisticSongIndex(null);
 
+    openSubScreen(item.name, null);
+
     try {
       setSong(await fetchHolyricsSongDetail(songId, item.name));
     } catch (error) {
@@ -241,7 +246,7 @@ export function ServicePage() {
     }
   }
 
-  async function handleCloseSongSheet() {
+  const handleCloseSongPanel = useCallback(async () => {
     try {
       await stopHolyricsPresentation();
     } catch (error) {
@@ -253,8 +258,9 @@ export function ServicePage() {
       setPendingSectionIndex(null);
       setSongPresentationActive(false);
       setOptimisticSongIndex(null);
+      closeSubScreen();
     }
-  }
+  }, [closeSubScreen]);
 
   async function handleOpenImage(item: HolyricsMediaPlaylistItem) {
     setImageItem(item);
@@ -262,6 +268,8 @@ export function ServicePage() {
     setImageError(null);
     setImageLoading(true);
     setImagePresentationActive(false);
+
+    openSubScreen(item.name, null);
 
     try {
       const presentation = await presentAndPreviewHolyricsImage(item.id);
@@ -291,7 +299,7 @@ export function ServicePage() {
     }
   }
 
-  async function handleCloseImageSheet() {
+  const handleCloseImagePanel = useCallback(async () => {
     try {
       await stopHolyricsPresentation();
     } catch (error) {
@@ -302,8 +310,9 @@ export function ServicePage() {
       setImageError(null);
       setPendingImageIndex(null);
       setImagePresentationActive(false);
+      closeSubScreen();
     }
-  }
+  }, [closeSubScreen]);
 
   async function handleOpenMedia(item: HolyricsMediaPlaylistItem) {
     if (item.type === "image") {
@@ -321,6 +330,8 @@ export function ServicePage() {
     setVideoError(null);
     setVideoLoading(true);
     setMediaPlayer(null);
+
+    openSubScreen(item.name, null);
 
     try {
       await presentHolyricsPlaylistItem(item.id);
@@ -349,7 +360,7 @@ export function ServicePage() {
     }
   }
 
-  async function handleCloseVideoSheet() {
+  const handleCloseVideoPanel = useCallback(async () => {
     try {
       await stopHolyricsPresentation();
     } catch (error) {
@@ -359,10 +370,122 @@ export function ServicePage() {
       setVideoDetail(null);
       setVideoError(null);
       setMediaPlayer(null);
+      closeSubScreen();
     }
-  }
+  }, [closeSubScreen]);
 
-  console.log(imageItem);
+  // Sync sub-screen content when state changes
+  useEffect(() => {
+    if (songItem) {
+      openSubScreen(
+        song?.title ?? songItem.name,
+        <SongSectionsPanel
+          currentSlide={currentPresentation?.slideNumber ?? null}
+          error={songError}
+          item={songItem}
+          loading={songLoading}
+          onGoToSection={handleGoToSection}
+          onPresentSong={handlePresentSong}
+          onToggleModifier={handleToggleModifier}
+          optimisticSectionIndex={optimisticSongIndex}
+          pendingIndex={pendingSectionIndex}
+          pendingModifier={pendingModifier}
+          modifiers={presentationModifiers}
+          presentationActive={songPresentationActive}
+          presenting={presenting}
+          song={song}
+        />
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    songItem,
+    song,
+    songLoading,
+    songError,
+    pendingSectionIndex,
+    presenting,
+    songPresentationActive,
+    currentPresentation,
+    optimisticSongIndex,
+    presentationModifiers,
+    pendingModifier
+  ]);
+
+  useEffect(() => {
+    if (imageItem) {
+      openSubScreen(
+        imagePresentation?.name ?? imageItem.name,
+        <ImagePresentationPanel
+          activeIndex={currentPresentation?.slideNumber ?? null}
+          error={imageError}
+          image={imagePresentation}
+          item={imageItem}
+          loading={imageLoading}
+          onShowSlide={handleShowImageSlide}
+          onToggleModifier={handleToggleModifier}
+          pendingIndex={pendingImageIndex}
+          pendingModifier={pendingModifier}
+          modifiers={presentationModifiers}
+        />
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    imageItem,
+    imagePresentation,
+    imageLoading,
+    imageError,
+    pendingImageIndex,
+    currentPresentation,
+    presentationModifiers,
+    pendingModifier
+  ]);
+
+  useEffect(() => {
+    if (videoItem) {
+      openSubScreen(
+        videoDetail?.name ?? videoItem.name,
+        <VideoPresentationPanel
+          detail={videoDetail}
+          error={videoError}
+          item={videoItem}
+          loading={videoLoading}
+          modifiers={presentationModifiers}
+          onPlayPause={handleToggleVideoPlayback}
+          onToggleModifier={handleToggleModifier}
+          pendingModifier={pendingModifier}
+          player={mediaPlayer}
+          playerPending={playerPending}
+        />
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    videoItem,
+    videoDetail,
+    videoLoading,
+    videoError,
+    presentationModifiers,
+    pendingModifier,
+    mediaPlayer,
+    playerPending
+  ]);
+
+  // Listen for sub-screen close to clean up state
+  const { isOpen } = useSubScreen();
+
+  useEffect(() => {
+    if (!isOpen && songItem) {
+      void handleCloseSongPanel();
+    } else if (!isOpen && imageItem) {
+      void handleCloseImagePanel();
+    } else if (!isOpen && videoItem) {
+      void handleCloseVideoPanel();
+    }
+    // Only trigger when isOpen changes to false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   return (
     <section className="space-y-6">
@@ -391,64 +514,6 @@ export function ServicePage() {
         }}
         open={Boolean(confirmItem)}
         pending={presenting}
-      />
-      <SongSectionsSheet
-        currentSlide={currentPresentation?.slideNumber ?? null}
-        error={songError}
-        item={songItem}
-        loading={songLoading}
-        onGoToSection={handleGoToSection}
-        onOpenChange={(open) => {
-          if (!open) {
-            void handleCloseSongSheet();
-          }
-        }}
-        onPresentSong={handlePresentSong}
-        onToggleModifier={handleToggleModifier}
-        open={Boolean(songItem)}
-        optimisticSectionIndex={optimisticSongIndex}
-        pendingIndex={pendingSectionIndex}
-        pendingModifier={pendingModifier}
-        modifiers={presentationModifiers}
-        presentationActive={songPresentationActive}
-        presenting={presenting}
-        song={song}
-      />
-      <ImagePresentationSheet
-        activeIndex={currentPresentation?.slideNumber ?? null}
-        error={imageError}
-        image={imagePresentation}
-        item={imageItem}
-        loading={imageLoading}
-        onOpenChange={(open) => {
-          if (!open) {
-            void handleCloseImageSheet();
-          }
-        }}
-        onShowSlide={handleShowImageSlide}
-        onToggleModifier={handleToggleModifier}
-        open={Boolean(imageItem)}
-        pendingIndex={pendingImageIndex}
-        pendingModifier={pendingModifier}
-        modifiers={presentationModifiers}
-      />
-      <VideoPresentationSheet
-        detail={videoDetail}
-        error={videoError}
-        item={videoItem}
-        loading={videoLoading}
-        modifiers={presentationModifiers}
-        onOpenChange={(open) => {
-          if (!open) {
-            void handleCloseVideoSheet();
-          }
-        }}
-        onPlayPause={handleToggleVideoPlayback}
-        onToggleModifier={handleToggleModifier}
-        open={Boolean(videoItem)}
-        pendingModifier={pendingModifier}
-        player={mediaPlayer}
-        playerPending={playerPending}
       />
     </section>
   );

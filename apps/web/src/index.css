@@ -153,6 +153,25 @@ a {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+:root {
+  --sub-screen-width: 28rem;
+}
+
+@keyframes sub-screen-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.sub-screen-panel {
+  animation: sub-screen-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

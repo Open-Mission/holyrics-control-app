@@ -6,9 +6,14 @@ import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AdminPage } from "@/pages/AdminPage";
+import { FilesPage } from "@/pages/FilesPage";
 import { HomePage } from "@/pages/HomePage";
-import { SettingsPage } from "@/pages/SettingsPage";
+import { ImagesPage } from "@/pages/ImagesPage";
+import { MediaMenuPage } from "@/pages/MediaMenuPage";
 import { ServicePage } from "@/pages/ServicePage";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { SongsPage } from "@/pages/SongsPage";
+import { VideosPage } from "@/pages/VideosPage";
 import { initializeTheme } from "@/lib/theme";
 
 import "./index.css";
@@ -25,6 +30,26 @@ const router = createBrowserRouter([
       {
         path: "culto",
         element: <ServicePage />
+      },
+      {
+        path: "musicas",
+        element: <SongsPage />
+      },
+      {
+        path: "imagens",
+        element: <ImagesPage />
+      },
+      {
+        path: "videos",
+        element: <VideosPage />
+      },
+      {
+        path: "arquivos",
+        element: <FilesPage />
+      },
+      {
+        path: "menu",
+        element: <MediaMenuPage />
       },
       {
         path: "admin",

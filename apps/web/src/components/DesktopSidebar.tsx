@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { HolyricsConnectionCard } from "./HolyricsConnectionCard";
-import { navItems } from "./nav-items";
+import { navItems, mediaItems } from "./nav-items";
 
 export function DesktopSidebar() {
   const location = useLocation();
@@ -39,7 +39,7 @@ export function DesktopSidebar() {
 
       <SidebarContent className="px-2 py-4">
         <SidebarGroup>
-          <SidebarGroupLabel>Navegacao</SidebarGroupLabel>
+          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -52,6 +52,28 @@ export function DesktopSidebar() {
                     tooltip={item.label}
                   >
                     <NavLink end={item.to === "/"} to={item.to}>
+                      <item.icon aria-hidden="true" className="size-4" strokeWidth={2.2} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Mídias</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mediaItems.map((item) => (
+                <SidebarMenuItem key={item.to}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname.startsWith(item.to)}
+                    tooltip={item.label}
+                  >
+                    <NavLink to={item.to}>
                       <item.icon aria-hidden="true" className="size-4" strokeWidth={2.2} />
                       <span>{item.label}</span>
                     </NavLink>

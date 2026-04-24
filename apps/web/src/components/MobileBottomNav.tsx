@@ -1,13 +1,19 @@
 import { NavLink } from "react-router";
 
 import { cn } from "@/lib/utils";
-import { navItems } from "@/components/nav-items";
+import { navItems, menuNavItem } from "@/components/nav-items";
 
 export function MobileBottomNav() {
+  const displayItems = [
+    navItems[0], // Inicio
+    navItems[1], // Culto
+    menuNavItem, // Menu (includes Media, Admin, Settings)
+  ];
+
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/94 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 backdrop-blur md:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
-        {navItems.map((item) => (
+      <div className="mx-auto grid max-w-md grid-cols-3 gap-1">
+        {displayItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
