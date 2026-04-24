@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  getCurrentPresentationState,
+  getHolyricsMediaDetail,
   getHolyricsMediaPlaylist,
+  getHolyricsMediaPlayerInfo,
   getHolyricsImagePresentation,
+  getPresentationModifiers,
   getHolyricsSongDetail,
   goToPresentationIndex,
+  mediaPlayerAction,
   presentMediaPlaylistItem,
   presentSong,
+  setPresentationModifier,
   stopPresentation
 } from "./service.js";
 
@@ -277,5 +283,250 @@ describe("Holyrics playlist service", () => {
 
     assert.equal(image.name, "");
     assert.deepEqual(image.slides, []);
+  });
+
+  test("maps song section click indexes to holyrics blank-first-slide offset via current presentation", async () => {
+    const state = await getCurrentPresentationState({
+      executeAction: async () => ({
+        id: "song-1",
+        type: "song",
+        name: "Grandioso Es Tu",
+        slide_number: 3,
+        total_slides: 5,
+        slide_type: "default"
+      })
+    });
+
+    assert.deepEqual(state, {
+      id: "song-1",
+      type: "song",
+      name: "Grandioso Es Tu",
+      slideNumber: 2,
+      totalSlides: 5,
+      slideType: "default"
+    });
+  });
+
+  test("supports wrapped current presentation responses", async () => {
+    const state = await getCurrentPresentationState({
+      executeAction: async () => ({
+        data: {
+          id: "video-1",
+          type: "video",
+          name: "Entrada",
+          slide_number: 1,
+          total_slides: 1,
+          slide_type: "default"
+        }
+      })
+    });
+
+    assert.deepEqual(state, {
+      id: "video-1",
+      type: "video",
+      name: "Entrada",
+      slideNumber: 0,
+      totalSlides: 1,
+      slideType: "default"
+    });
+  });
+
+  test("normalizes unknown and invalid current presentation types to shared-safe values", async () => {
+    const unknownState = await getCurrentPresentationState({
+      executeAction: async () => ({
+        id: "presentation-1",
+        type: "custom_type",
+        name: "Custom Media",
+        slide_number: 1,
+        total_slides: 1,
+        slide_type: "custom_slide_type"
+      })
+    });
+
+    const invalidState = await getCurrentPresentationState({
+      executeAction: async () => ({
+        id: "presentation-2",
+        type: 123,
+        name: "Broken Media",
+        slide_number: 1,
+        total_slides: 1,
+        slide_type: false
+      })
+    });
+
+    assert.equal(unknownState.type, "unknown");
+    assert.equal(unknownState.slideType, "unknown");
+    assert.equal(invalidState.type, null);
+    assert.equal(invalidState.slideType, null);
+  });
+
+  test("returns presentation modifier states", async () => {
+    const calls: string[] = [];
+    const modifiers = await getPresentationModifiers({
+      executeAction: async (action) => {
+        calls.push(action);
+        if (action === "GetF8") return true;
+        if (action === "GetF9") return false;
+        if (action === "GetF10") return true;
+        return null;
+      }
+    });
+
+    assert.deepEqual(calls, ["GetF8", "GetF9", "GetF10"]);
+    assert.deepEqual(modifiers, { wallpaper: true, blank: false, black: true });
+  });
+
+  test("returns presentation modifier states from wrapped booleans", async () => {
+    const modifiers = await getPresentationModifiers({
+      executeAction: async (action) => {
+        if (action === "GetF8") return { data: true };
+        if (action === "GetF9") return { data: false };
+        if (action === "GetF10") return { data: true };
+        return null;
+      }
+    });
+
+    assert.deepEqual(modifiers, { wallpaper: true, blank: false, black: true });
+  });
+
+  test("sends modifier action mapped by key", async () => {
+    const calls: Array<[string, Record<string, unknown>]> = [];
+    await setPresentationModifier("blank", true, {
+      executeAction: async (action, body) => {
+        calls.push([action, body ?? {}]);
+        return null;
+      }
+    });
+
+    assert.deepEqual(calls, [["SetF9", { enable: true }]]);
+  });
+
+  test("returns video metadata and thumbnail from holyrics file action", async () => {
+    const detail = await getHolyricsMediaDetail("video", "entrada.mp4", {
+      executeAction: async (action) => {
+        assert.equal(action, "GetVideo");
+        return {
+          data: {
+            name: "entrada.mp4",
+            width: 1920,
+            height: 1080,
+            duration_ms: 321000,
+            thumbnail: "thumb64"
+          }
+        };
+      }
+    });
+
+    assert.deepEqual(detail, {
+      type: "video",
+      name: "entrada.mp4",
+      thumbnail: "thumb64",
+      width: 1920,
+      height: 1080,
+      durationMs: 321000,
+      relativePath: null
+    });
+  });
+
+  test("returns media detail from direct holyrics file response", async () => {
+    const detail = await getHolyricsMediaDetail("audio", "trilha.mp3", {
+      executeAction: async (action) => {
+        assert.equal(action, "GetAudio");
+        return {
+          name: "trilha.mp3",
+          duration_ms: 185000,
+          relative_path: "audio/trilha.mp3"
+        };
+      }
+    });
+
+    assert.deepEqual(detail, {
+      type: "audio",
+      name: "trilha.mp3",
+      thumbnail: null,
+      width: null,
+      height: null,
+      durationMs: 185000,
+      relativePath: "audio/trilha.mp3"
+    });
+  });
+
+  test("returns media player info and executes play pause actions", async () => {
+    const calls: Array<[string, Record<string, unknown>]> = [];
+    const executeAction = async (action: string, body?: Record<string, unknown>) => {
+      calls.push([action, body ?? {}]);
+      if (action === "GetMediaPlayerInfo") {
+        return {
+          name: "entrada.mp4",
+          path: "C:/Holyrics/files/media/video/entrada.mp4",
+          relative_path: "video/entrada.mp4",
+          playing: false,
+          duration_ms: 123000,
+          time_ms: 0,
+          time_elapsed: "00:00",
+          time_remaining: "02:03",
+          volume: 80,
+          mute: false,
+          repeat: false,
+          execute_single: true,
+          shuffle: false,
+          fullscreen: false
+        };
+      }
+      return null;
+    };
+
+    const info = await getHolyricsMediaPlayerInfo({ executeAction });
+    await mediaPlayerAction({ action: "play" }, { executeAction });
+    await mediaPlayerAction({ action: "pause" }, { executeAction });
+
+    assert.equal(info.name, "entrada.mp4");
+    assert.deepEqual(calls.slice(1), [
+      ["MediaPlayerAction", { action: "play" }],
+      ["MediaPlayerAction", { action: "pause" }]
+    ]);
+  });
+
+  test("returns media player info from wrapped holyrics response", async () => {
+    const info = await getHolyricsMediaPlayerInfo({
+      executeAction: async (action) => {
+        assert.equal(action, "GetMediaPlayerInfo");
+        return {
+          data: {
+            name: "entrada.mp4",
+            path: "C:/Holyrics/files/media/video/entrada.mp4",
+            relative_path: "video/entrada.mp4",
+            playing: true,
+            duration_ms: 123000,
+            time_ms: 21000,
+            time_elapsed: "00:21",
+            time_remaining: "01:42",
+            volume: 65,
+            mute: false,
+            repeat: true,
+            execute_single: false,
+            shuffle: true,
+            fullscreen: true
+          }
+        };
+      }
+    });
+
+    assert.deepEqual(info, {
+      name: "entrada.mp4",
+      path: "C:/Holyrics/files/media/video/entrada.mp4",
+      relativePath: "video/entrada.mp4",
+      playing: true,
+      durationMs: 123000,
+      timeMs: 21000,
+      timeElapsed: "00:21",
+      timeRemaining: "01:42",
+      volume: 65,
+      mute: false,
+      repeat: true,
+      executeSingle: false,
+      shuffle: true,
+      fullscreen: true
+    });
   });
 });

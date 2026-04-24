@@ -121,6 +121,86 @@ export type HolyricsImagePresentation = {
   slides: HolyricsImageSlide[];
 };
 
+export type HolyricsPresentationModifierKey = "wallpaper" | "blank" | "black";
+
+export type HolyricsPresentationModifiers = Record<HolyricsPresentationModifierKey, boolean>;
+
+export type HolyricsPresentationItemType =
+  | "song"
+  | "verse"
+  | "text"
+  | "audio"
+  | "video"
+  | "image"
+  | "announcement"
+  | "automatic_presentation"
+  | "quick_presentation"
+  | "unknown";
+
+export type HolyricsPresentationSlideType =
+  | "default"
+  | "wallpaper"
+  | "blank"
+  | "black"
+  | "final_slide"
+  | "unknown";
+
+export type HolyricsCurrentPresentationState = {
+  id: string | null;
+  type: HolyricsPresentationItemType | null;
+  name: string | null;
+  slideNumber: number | null;
+  totalSlides: number | null;
+  slideType: HolyricsPresentationSlideType | null;
+};
+
+export type HolyricsMediaPlayerInfo = {
+  name: string;
+  path: string | null;
+  relativePath: string | null;
+  playing: boolean;
+  durationMs: number | null;
+  timeMs: number | null;
+  timeElapsed: string | null;
+  timeRemaining: string | null;
+  volume: number | null;
+  mute: boolean;
+  repeat: boolean;
+  executeSingle: boolean;
+  shuffle: boolean;
+  fullscreen: boolean;
+};
+
+export type HolyricsMediaDetail = {
+  type: HolyricsMediaPlaylistItemType;
+  name: string;
+  thumbnail: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  relativePath: string | null;
+};
+
+export type PresentationModifierRequest = {
+  key: HolyricsPresentationModifierKey;
+  enable: boolean;
+};
+
+type RequireAtLeastOne<T extends object, Keys extends keyof T = keyof T> = {
+  [K in Keys]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
+}[Keys];
+
+export type MediaPlayerActionRequest = RequireAtLeastOne<{
+  action?: "play" | "pause" | "stop" | "next" | "previous";
+  volume?: number;
+  mute?: boolean;
+  repeat?: boolean;
+  shuffle?: boolean;
+  executeSingle?: boolean;
+  fullscreen?: boolean;
+  timeMs?: number;
+}>;
+
 export type PresentAndPreviewImageRequest = {
   id: string;
 };

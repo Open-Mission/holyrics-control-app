@@ -1,6 +1,9 @@
 import { CalendarClock, FileX2, ImageIcon, ListMusic, Music2, Play, RefreshCw } from "lucide-react";
 
-import type { HolyricsMediaPlaylistItem, HolyricsMediaPlaylistResponse } from "@holyrics-control/shared";
+import type {
+  HolyricsMediaPlaylistItem,
+  HolyricsMediaPlaylistResponse
+} from "@holyrics-control/shared";
 
 import { Button } from "@/components/ui/button";
 import { getMediaItemLabel, getMediaItemTone } from "@/lib/holyrics-playlist";
@@ -14,6 +17,7 @@ type MediaPlaylistPanelProps = {
   onPresent: (item: HolyricsMediaPlaylistItem) => void;
   onOpenSong: (item: HolyricsMediaPlaylistItem) => void;
   onOpenImage: (item: HolyricsMediaPlaylistItem) => void;
+  onOpenMedia: (item: HolyricsMediaPlaylistItem) => void;
 };
 
 function formatScheduleDate(value: string | null) {
@@ -48,9 +52,12 @@ export function MediaPlaylistPanel({
   onRefresh,
   onPresent,
   onOpenSong,
-  onOpenImage
+  onOpenImage,
+  onOpenMedia
 }: MediaPlaylistPanelProps) {
   const hasItems = Boolean(playlist?.items.some((item) => item.type !== "title"));
+
+  console.log(playlist);
 
   return (
     <div className="space-y-4">
@@ -66,7 +73,13 @@ export function MediaPlaylistPanel({
               <span>{formatScheduleDate(playlist?.schedule?.datetime ?? null)}</span>
             </div>
           </div>
-          <Button disabled={loading} onClick={onRefresh} size="icon" type="button" variant="outline">
+          <Button
+            disabled={loading}
+            onClick={onRefresh}
+            size="icon"
+            type="button"
+            variant="outline"
+          >
             <RefreshCw className={cn("size-4", loading && "animate-spin")} />
             <span className="sr-only">Atualizar playlist</span>
           </Button>
@@ -88,7 +101,9 @@ export function MediaPlaylistPanel({
         <div className="rounded-lg border bg-card p-6 text-center">
           <FileX2 className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium">Playlist de midia vazia</p>
-          <p className="mt-1 text-sm text-muted-foreground">Adicione itens no Holyrics para controlar por aqui.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Adicione itens no Holyrics para controlar por aqui.
+          </p>
         </div>
       ) : null}
 
@@ -100,12 +115,18 @@ export function MediaPlaylistPanel({
         <div className="space-y-5">
           {playlist?.groups.map((group, groupIndex) => (
             <section className="space-y-2" key={`${group.title ?? "sem-titulo"}-${groupIndex}`}>
-              <h3 className="text-sm font-semibold text-foreground">{group.title ?? "Sem titulo"}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {group.title ?? "Sem titulo"}
+              </h3>
               <div className="divide-y rounded-lg border bg-card shadow-sm">
                 {group.items.map((item) => (
                   <div className="flex items-center gap-3 p-3" key={`${item.id}-${item.index}`}>
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      {item.type === "image" ? <ImageIcon className="size-4" /> : <Music2 className="size-4" />}
+                      {item.type === "image" ? (
+                        <ImageIcon className="size-4" />
+                      ) : (
+                        <Music2 className="size-4" />
+                      )}
                     </div>
                     <button
                       className="min-w-0 flex-1 text-left"
@@ -114,19 +135,33 @@ export function MediaPlaylistPanel({
                           ? onOpenSong(item)
                           : item.type === "image"
                             ? onOpenImage(item)
-                            : item.executable
-                              ? onPresent(item)
-                              : undefined
+                            : item.type === "video" || item.type === "audio" || item.type === "file"
+                              ? onOpenMedia(item)
+                              : item.executable
+                                ? onPresent(item)
+                                : undefined
                       }
                       type="button"
                     >
-                      <p className="truncate text-sm font-medium text-card-foreground">{item.name}</p>
+                      <p className="truncate text-sm font-medium text-card-foreground">
+                        {item.name}
+                      </p>
                       <div className="mt-1">
                         <ItemBadge type={item.type} />
                       </div>
                     </button>
-                    {item.executable && item.type !== "song" && item.type !== "image" ? (
-                      <Button onClick={() => onPresent(item)} size="icon-sm" type="button" variant="outline">
+                    {item.executable &&
+                    item.type !== "song" &&
+                    item.type !== "image" &&
+                    item.type !== "video" &&
+                    item.type !== "audio" &&
+                    item.type !== "file" ? (
+                      <Button
+                        onClick={() => onPresent(item)}
+                        size="icon-sm"
+                        type="button"
+                        variant="outline"
+                      >
                         <Play className="size-4" />
                         <span className="sr-only">Apresentar {item.name}</span>
                       </Button>

@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type {
+  HolyricsCurrentPresentationState,
   HolyricsImagePresentation,
+  HolyricsMediaDetail,
+  HolyricsMediaPlayerInfo,
   HolyricsMediaPlaylistItem,
   HolyricsMediaPlaylistResponse,
+  HolyricsPresentationModifierKey,
+  HolyricsPresentationModifiers,
   HolyricsSongDetail
 } from "@holyrics-control/shared";
 
@@ -13,16 +18,22 @@ import { MediaPlaylistPanel } from "@/components/MediaPlaylistPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { PresentationConfirmDialog } from "@/components/PresentationConfirmDialog";
 import { SongSectionsSheet } from "@/components/SongSectionsSheet";
+import { VideoPresentationSheet } from "@/components/VideoPresentationSheet";
 import {
+  fetchCurrentPresentationState,
+  fetchHolyricsMediaDetail,
+  fetchHolyricsMediaPlayerInfo,
   fetchHolyricsMediaPlaylist,
   fetchHolyricsSongDetail,
-  getCurrentSlide,
+  fetchPresentationModifiers,
   getImagePresentationIndex,
   getSongPresentationIndex,
   goToHolyricsPresentationIndex,
+  mediaPlayerAction,
   presentAndPreviewHolyricsImage,
   presentHolyricsPlaylistItem,
   presentHolyricsSong,
+  setHolyricsPresentationModifier,
   stopHolyricsPresentation
 } from "@/lib/holyrics-playlist";
 
@@ -39,12 +50,14 @@ export function ServicePage() {
   const [playlistError, setPlaylistError] = useState<string | null>(null);
   const [confirmItem, setConfirmItem] = useState<HolyricsMediaPlaylistItem | null>(null);
   const [presenting, setPresenting] = useState(false);
+
   const [songItem, setSongItem] = useState<HolyricsMediaPlaylistItem | null>(null);
   const [song, setSong] = useState<HolyricsSongDetail | null>(null);
   const [songLoading, setSongLoading] = useState(false);
   const [songError, setSongError] = useState<string | null>(null);
   const [pendingSectionIndex, setPendingSectionIndex] = useState<number | null>(null);
   const [songPresentationActive, setSongPresentationActive] = useState(false);
+
   const [imageItem, setImageItem] = useState<HolyricsMediaPlaylistItem | null>(null);
   const [imagePresentation, setImagePresentation] = useState<HolyricsImagePresentation | null>(
     null
@@ -53,7 +66,27 @@ export function ServicePage() {
   const [imageError, setImageError] = useState<string | null>(null);
   const [pendingImageIndex, setPendingImageIndex] = useState<number | null>(null);
   const [imagePresentationActive, setImagePresentationActive] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState<number | null>(null);
+
+  const [videoItem, setVideoItem] = useState<HolyricsMediaPlaylistItem | null>(null);
+  const [videoDetail, setVideoDetail] = useState<HolyricsMediaDetail | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+
+  const [presentationModifiers, setPresentationModifiers] = useState<HolyricsPresentationModifiers>(
+    {
+      wallpaper: false,
+      blank: false,
+      black: false
+    }
+  );
+  const [pendingModifier, setPendingModifier] = useState<HolyricsPresentationModifierKey | null>(
+    null
+  );
+  const [currentPresentation, setCurrentPresentation] =
+    useState<HolyricsCurrentPresentationState | null>(null);
+  const [optimisticSongIndex, setOptimisticSongIndex] = useState<number | null>(null);
+  const [mediaPlayer, setMediaPlayer] = useState<HolyricsMediaPlayerInfo | null>(null);
+  const [playerPending, setPlayerPending] = useState(false);
 
   const loadPlaylist = useCallback(async () => {
     setPlaylistLoading(true);
@@ -72,32 +105,60 @@ export function ServicePage() {
     void loadPlaylist();
   }, [loadPlaylist]);
 
+  const anySheetOpen = Boolean(songItem || imageItem || videoItem);
+
   useEffect(() => {
-    if (!songItem && !imageItem) {
+    if (!anySheetOpen) {
       return;
     }
 
     let mounted = true;
 
-    async function pollSlide() {
+    async function poll() {
       try {
-        const { slide } = await getCurrentSlide();
-        if (mounted) {
-          setCurrentSlide(slide);
-        }
+        const [state, modifiers, player] = await Promise.all([
+          fetchCurrentPresentationState(),
+          fetchPresentationModifiers(),
+          videoItem ? fetchHolyricsMediaPlayerInfo() : Promise.resolve(null)
+        ]);
+
+        if (!mounted) return;
+
+        setCurrentPresentation(state);
+        setPresentationModifiers(modifiers);
+        if (player) setMediaPlayer(player);
       } catch {
-        // Ignore polling errors
+        // ignore polling errors
       }
     }
 
-    pollSlide();
-    const interval = setInterval(pollSlide, SLIDE_POLL_INTERVAL_MS);
-
+    void poll();
+    const interval = setInterval(poll, SLIDE_POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [songItem, imageItem]);
+  }, [anySheetOpen, videoItem]);
+
+  useEffect(() => {
+    if (currentPresentation?.type === "song" && currentPresentation.slideNumber !== null) {
+      setOptimisticSongIndex(currentPresentation.slideNumber);
+    }
+  }, [currentPresentation]);
+
+  async function handleToggleModifier(key: HolyricsPresentationModifierKey, enable: boolean) {
+    setPendingModifier(key);
+    setPresentationModifiers((current) => ({ ...current, [key]: enable }));
+
+    try {
+      await setHolyricsPresentationModifier(key, enable);
+    } catch (error) {
+      setPlaylistError(getErrorMessage(error));
+      setPresentationModifiers((current) => ({ ...current, [key]: !enable }));
+    } finally {
+      setPendingModifier(null);
+    }
+  }
 
   async function handleConfirmPresentation() {
     if (!confirmItem) {
@@ -124,6 +185,7 @@ export function ServicePage() {
     setSongError(null);
     setSongLoading(true);
     setSongPresentationActive(false);
+    setOptimisticSongIndex(null);
 
     try {
       setSong(await fetchHolyricsSongDetail(songId, item.name));
@@ -162,6 +224,7 @@ export function ServicePage() {
     const presentationIndex = getSongPresentationIndex(index);
 
     setPendingSectionIndex(index);
+    setOptimisticSongIndex(index);
     setSongError(null);
 
     try {
@@ -189,6 +252,7 @@ export function ServicePage() {
       setSongError(null);
       setPendingSectionIndex(null);
       setSongPresentationActive(false);
+      setOptimisticSongIndex(null);
     }
   }
 
@@ -241,6 +305,65 @@ export function ServicePage() {
     }
   }
 
+  async function handleOpenMedia(item: HolyricsMediaPlaylistItem) {
+    if (item.type === "image") {
+      await handleOpenImage(item);
+      return;
+    }
+
+    if (item.type !== "video" && item.type !== "audio" && item.type !== "file") {
+      setConfirmItem(item);
+      return;
+    }
+
+    setVideoItem(item);
+    setVideoDetail(null);
+    setVideoError(null);
+    setVideoLoading(true);
+    setMediaPlayer(null);
+
+    try {
+      await presentHolyricsPlaylistItem(item.id);
+      setVideoDetail(await fetchHolyricsMediaDetail(item.type, item.name));
+      if (item.type === "video" || item.type === "audio") {
+        setMediaPlayer(await fetchHolyricsMediaPlayerInfo());
+      }
+    } catch (error) {
+      setVideoError(getErrorMessage(error));
+    } finally {
+      setVideoLoading(false);
+    }
+  }
+
+  async function handleToggleVideoPlayback() {
+    setPlayerPending(true);
+    setVideoError(null);
+
+    try {
+      await mediaPlayerAction({ action: mediaPlayer?.playing ? "pause" : "play" });
+      setMediaPlayer(await fetchHolyricsMediaPlayerInfo());
+    } catch (error) {
+      setVideoError(getErrorMessage(error));
+    } finally {
+      setPlayerPending(false);
+    }
+  }
+
+  async function handleCloseVideoSheet() {
+    try {
+      await stopHolyricsPresentation();
+    } catch (error) {
+      setPlaylistError(getErrorMessage(error));
+    } finally {
+      setVideoItem(null);
+      setVideoDetail(null);
+      setVideoError(null);
+      setMediaPlayer(null);
+    }
+  }
+
+  console.log(imageItem);
+
   return (
     <section className="space-y-6">
       <PageHeader
@@ -252,6 +375,7 @@ export function ServicePage() {
         error={playlistError}
         loading={playlistLoading}
         onOpenImage={handleOpenImage}
+        onOpenMedia={handleOpenMedia}
         onOpenSong={handleOpenSong}
         onPresent={setConfirmItem}
         onRefresh={loadPlaylist}
@@ -269,7 +393,7 @@ export function ServicePage() {
         pending={presenting}
       />
       <SongSectionsSheet
-        currentSlide={currentSlide}
+        currentSlide={currentPresentation?.slideNumber ?? null}
         error={songError}
         item={songItem}
         loading={songLoading}
@@ -280,14 +404,18 @@ export function ServicePage() {
           }
         }}
         onPresentSong={handlePresentSong}
+        onToggleModifier={handleToggleModifier}
         open={Boolean(songItem)}
+        optimisticSectionIndex={optimisticSongIndex}
         pendingIndex={pendingSectionIndex}
+        pendingModifier={pendingModifier}
+        modifiers={presentationModifiers}
         presentationActive={songPresentationActive}
         presenting={presenting}
         song={song}
       />
       <ImagePresentationSheet
-        activeIndex={currentSlide}
+        activeIndex={currentPresentation?.slideNumber ?? null}
         error={imageError}
         image={imagePresentation}
         item={imageItem}
@@ -298,8 +426,29 @@ export function ServicePage() {
           }
         }}
         onShowSlide={handleShowImageSlide}
+        onToggleModifier={handleToggleModifier}
         open={Boolean(imageItem)}
         pendingIndex={pendingImageIndex}
+        pendingModifier={pendingModifier}
+        modifiers={presentationModifiers}
+      />
+      <VideoPresentationSheet
+        detail={videoDetail}
+        error={videoError}
+        item={videoItem}
+        loading={videoLoading}
+        modifiers={presentationModifiers}
+        onOpenChange={(open) => {
+          if (!open) {
+            void handleCloseVideoSheet();
+          }
+        }}
+        onPlayPause={handleToggleVideoPlayback}
+        onToggleModifier={handleToggleModifier}
+        open={Boolean(videoItem)}
+        pendingModifier={pendingModifier}
+        player={mediaPlayer}
+        playerPending={playerPending}
       />
     </section>
   );

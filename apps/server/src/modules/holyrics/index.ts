@@ -2,6 +2,8 @@ import type { FastifyPluginAsync } from "fastify";
 
 import type {
   HolyricsConfigTestResult,
+  MediaPlayerActionRequest,
+  PresentationModifierRequest,
   SaveHolyricsConfigRequest
 } from "@holyrics-control/shared";
 
@@ -11,13 +13,19 @@ import {
   saveLocalHolyricsConfig
 } from "./config.js";
 import {
+  getCurrentPresentationState,
+  getHolyricsMediaDetail,
+  getHolyricsMediaPlayerInfo,
   getHolyricsMediaPlaylist,
   getHolyricsImagePresentation,
+  getPresentationModifiers,
   getHolyricsSongDetail,
   goToPresentationIndex,
   getCurrentSlideNumber,
+  mediaPlayerAction,
   presentMediaPlaylistItem,
   presentSong,
+  setPresentationModifier,
   stopPresentation
 } from "../playlist/service.js";
 
@@ -29,6 +37,10 @@ type HolyricsTokenInfoResponse = {
   };
   error?: unknown;
 };
+
+const presentationModifierKeys = ["wallpaper", "blank", "black"] as const;
+const mediaPlayerActions = ["play", "pause", "stop", "next", "previous"] as const;
+const mediaDetailTypes = ["image", "video", "audio", "file"] as const;
 
 function isSaveConfigRequest(body: unknown): body is SaveHolyricsConfigRequest {
   if (typeof body !== "object" || body === null) {
@@ -63,6 +75,63 @@ function isGoToIndexRequest(body: unknown): body is { index: number } {
     Number.isInteger((body as { index?: unknown }).index) &&
     Number((body as { index?: unknown }).index) >= 0
   );
+}
+
+function isPresentationModifierRequest(body: unknown): body is PresentationModifierRequest {
+  if (typeof body !== "object" || body === null) {
+    return false;
+  }
+
+  const request = body as Partial<PresentationModifierRequest>;
+
+  return (
+    typeof request.key === "string" &&
+    presentationModifierKeys.includes(request.key as PresentationModifierRequest["key"]) &&
+    typeof request.enable === "boolean"
+  );
+}
+
+function isMediaPlayerActionRequest(body: unknown): body is MediaPlayerActionRequest {
+  if (typeof body !== "object" || body === null) {
+    return false;
+  }
+
+  const request = body as Partial<MediaPlayerActionRequest>;
+  const hasKnownField =
+    request.action !== undefined ||
+    request.volume !== undefined ||
+    request.mute !== undefined ||
+    request.repeat !== undefined ||
+    request.shuffle !== undefined ||
+    request.executeSingle !== undefined ||
+    request.fullscreen !== undefined ||
+    request.timeMs !== undefined;
+
+  if (!hasKnownField) {
+    return false;
+  }
+
+  return (
+    (request.action === undefined ||
+      (typeof request.action === "string" &&
+        mediaPlayerActions.includes(request.action as NonNullable<MediaPlayerActionRequest["action"]>))) &&
+    (request.volume === undefined ||
+      (typeof request.volume === "number" &&
+        Number.isFinite(request.volume) &&
+        request.volume >= 0 &&
+        request.volume <= 100)) &&
+    (request.mute === undefined || typeof request.mute === "boolean") &&
+    (request.repeat === undefined || typeof request.repeat === "boolean") &&
+    (request.shuffle === undefined || typeof request.shuffle === "boolean") &&
+    (request.executeSingle === undefined || typeof request.executeSingle === "boolean") &&
+    (request.fullscreen === undefined || typeof request.fullscreen === "boolean") &&
+    (request.timeMs === undefined ||
+      (typeof request.timeMs === "number" && Number.isFinite(request.timeMs) && request.timeMs >= 0))
+  );
+}
+
+function isSupportedMediaDetailType(value: unknown): value is "image" | "video" | "audio" | "file" {
+  return typeof value === "string" && mediaDetailTypes.includes(value as (typeof mediaDetailTypes)[number]);
 }
 
 function errorMessage(error: unknown) {
@@ -211,6 +280,68 @@ export const holyricsRoutes: FastifyPluginAsync = async (app) => {
     try {
       const slide = await getCurrentSlideNumber();
       return { slide };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get("/presentation/state", async (_request, reply) => {
+    try {
+      return await getCurrentPresentationState();
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get("/presentation/modifiers", async (_request, reply) => {
+    try {
+      return await getPresentationModifiers();
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/presentation/modifiers", async (request, reply) => {
+    if (!isPresentationModifierRequest(request.body)) {
+      return reply.code(400).send({ error: "Informe modifier valido e estado booleano." });
+    }
+
+    try {
+      await setPresentationModifier(request.body.key, request.body.enable);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get<{ Querystring: { type?: string; name?: string } }>("/media/detail", async (request, reply) => {
+    if (!isSupportedMediaDetailType(request.query.type) || typeof request.query.name !== "string" || !request.query.name) {
+      return reply.code(400).send({ error: "Informe tipo e nome de midia validos." });
+    }
+
+    try {
+      return await getHolyricsMediaDetail(request.query.type, request.query.name);
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.get("/media/player", async (_request, reply) => {
+    try {
+      return await getHolyricsMediaPlayerInfo();
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/media/player/action", async (request, reply) => {
+    if (!isMediaPlayerActionRequest(request.body)) {
+      return reply.code(400).send({ error: "Informe uma acao valida do player." });
+    }
+
+    try {
+      await mediaPlayerAction(request.body);
+      return { ok: true };
     } catch (error) {
       return reply.code(502).send({ error: errorMessage(error) });
     }
