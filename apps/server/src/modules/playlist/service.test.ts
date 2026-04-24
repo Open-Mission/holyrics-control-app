@@ -3,10 +3,12 @@ import { describe, test } from "node:test";
 
 import {
   getHolyricsMediaPlaylist,
+  getHolyricsImagePresentation,
   getHolyricsSongDetail,
   goToPresentationIndex,
   presentMediaPlaylistItem,
-  presentSong
+  presentSong,
+  stopPresentation
 } from "./service.js";
 
 describe("Holyrics playlist service", () => {
@@ -15,19 +17,21 @@ describe("Holyrics playlist service", () => {
     const playlist = await getHolyricsMediaPlaylist({
       executeAction: async (action, body) => {
         calls.push([action, body ?? {}]);
-        return {
-          type: "event",
-          name: "Culto Domingo",
-          datetime: "2026-04-26 19:00",
-          notes: "Santa ceia",
-          media_playlist: [
-            { id: "t1", type: "title", name: "Abertura" },
-            { id: "playlist-item-1", song_id: "s1", type: "song", name: "Grandioso Es Tu" },
-            { id: "i1", type: "image", name: "aviso.jpg" },
-            { id: "t2", type: "title", name: "Palavra" },
-            { id: "f1", type: "file", name: "roteiro.pdf" }
-          ]
-        };
+        return [
+          {
+            type: "event",
+            name: "Culto Domingo",
+            datetime: "2026-04-26 19:00",
+            notes: "Santa ceia",
+            media_playlist: [
+              { id: "t1", type: "title", name: "Abertura" },
+              { id: "playlist-item-1", song_id: "s1", type: "song", name: "Grandioso Es Tu" },
+              { id: "i1", type: "image", name: "aviso.jpg" },
+              { id: "t2", type: "title", name: "Palavra" },
+              { id: "f1", type: "file", name: "roteiro.pdf" }
+            ]
+          }
+        ];
       }
     });
 
@@ -44,6 +48,29 @@ describe("Holyrics playlist service", () => {
     assert.equal(playlist.items[1].id, "playlist-item-1");
     assert.equal(playlist.items[1].songId, "s1");
     assert.equal(playlist.items[4].executable, false);
+  });
+
+  test("extracts event name from metadata when schedule name is empty", async () => {
+    const playlist = await getHolyricsMediaPlaylist({
+      executeAction: async () => [
+        {
+          type: "event",
+          name: "",
+          datetime: "2026-04-26 19:00",
+          notes: "",
+          media_playlist: [],
+          metadata: {
+            event: {
+              id: "evt-123",
+              name: "Culto Especial"
+            }
+          }
+        }
+      ]
+    });
+
+    assert.equal(playlist.schedule?.name, "Culto Especial");
+    assert.equal(playlist.schedule?.eventId, "evt-123");
   });
 
   test("falls back to GetMediaPlaylist when current schedule has no media_playlist", async () => {
@@ -179,11 +206,76 @@ describe("Holyrics playlist service", () => {
     await presentMediaPlaylistItem("abc", { executeAction });
     await presentSong("s1", 2, { executeAction });
     await goToPresentationIndex(3, { executeAction });
+    await stopPresentation({ executeAction });
 
     assert.deepEqual(calls, [
       ["MediaPlaylistAction", { id: "abc" }],
       ["ShowSong", { id: "s1", initial_index: 2 }],
-      ["ActionGoToIndex", { index: 3 }]
+      ["ActionGoToIndex", { index: 3 }],
+      ["CloseCurrentPresentation", {}]
     ]);
+  });
+
+  test("presents the playlist item and returns the current presentation preview", async () => {
+    const actions: Array<[string, Record<string, unknown>]> = [];
+    const image = await getHolyricsImagePresentation("playlist-item-42", {
+      executeAction: async (action, body) => {
+        actions.push([action, body ?? {}]);
+
+        if (action === "MediaPlaylistAction") {
+          return null;
+        }
+
+        if (action === "GetCurrentPresentation") {
+          return {
+            id: "pres-1",
+            type: "image",
+            name: "02 - Agenda",
+            slide_number: 1,
+            total_slides: 2,
+            slides: [
+              { number: 1, text: "IMG-20260412-WA0008.jpg", preview: "base64-1" },
+              { number: 2, text: "IMG-20260412-WA0009.jpg", preview: "base64-2" }
+            ]
+          };
+        }
+
+        return null;
+      }
+    });
+
+    assert.deepEqual(actions, [
+      ["MediaPlaylistAction", { id: "playlist-item-42" }],
+      [
+        "GetCurrentPresentation",
+        {
+          include_slides: true,
+          include_slide_preview: true,
+          slide_preview_size: "640x360"
+        }
+      ]
+    ]);
+    assert.equal(image.name, "02 - Agenda");
+    assert.deepEqual(image.slides, [
+      { index: 0, name: "IMG-20260412-WA0008.jpg", thumbnail: "base64-1", width: null, height: null },
+      { index: 1, name: "IMG-20260412-WA0009.jpg", thumbnail: "base64-2", width: null, height: null }
+    ]);
+  });
+
+  test("returns an empty slide list when nothing is being presented", async () => {
+    const image = await getHolyricsImagePresentation("playlist-item-42", {
+      executeAction: async (action) => {
+        if (action === "MediaPlaylistAction") {
+          return null;
+        }
+        if (action === "GetCurrentPresentation") {
+          return null;
+        }
+        return null;
+      }
+    });
+
+    assert.equal(image.name, "");
+    assert.deepEqual(image.slides, []);
   });
 });

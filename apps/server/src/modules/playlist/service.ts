@@ -1,5 +1,6 @@
 import type {
   HolyricsActiveSchedule,
+  HolyricsImagePresentation,
   HolyricsMediaPlaylistItem,
   HolyricsMediaPlaylistResponse,
   HolyricsSongDetail,
@@ -14,19 +15,43 @@ export type HolyricsPlaylistServiceOptions = {
   executeAction?: ExecuteAction;
 };
 
+type RawEvent = {
+  id?: unknown;
+  name?: unknown;
+};
+
 type RawSchedule = {
   type?: unknown;
   name?: unknown;
   datetime?: unknown;
   notes?: unknown;
   media_playlist?: unknown;
+  metadata?: {
+    event?: RawEvent;
+  };
 };
+
+type RawInterfaceInput = string;
 
 type RawPlaylistItem = {
   id?: unknown;
   song_id?: unknown;
   type?: unknown;
   name?: unknown;
+};
+
+type RawPresentationSlide = {
+  number?: unknown;
+  text?: unknown;
+  slide_description?: unknown;
+  preview?: unknown;
+};
+
+type RawCurrentPresentation = {
+  id?: unknown;
+  type?: unknown;
+  name?: unknown;
+  slides?: unknown;
 };
 
 type RawSong = {
@@ -91,11 +116,17 @@ function normalizeSchedule(raw: RawSchedule | null): HolyricsActiveSchedule | nu
     return null;
   }
 
+  const eventId = raw.metadata?.event?.id;
+  const eventName = raw.metadata?.event?.name;
+  const scheduleName = asString(raw.name);
+  const finalName = scheduleName || asString(eventName);
+
   return {
     type: asString(raw.type, "temporary"),
-    name: asString(raw.name),
+    name: finalName,
     datetime: typeof raw.datetime === "string" && raw.datetime ? raw.datetime : null,
-    notes: asString(raw.notes)
+    notes: asString(raw.notes),
+    eventId: typeof eventId === "string" ? eventId : null
   };
 }
 
@@ -161,15 +192,39 @@ export async function getHolyricsMediaPlaylist(
   options: HolyricsPlaylistServiceOptions = {}
 ): Promise<HolyricsMediaPlaylistResponse> {
   const executeAction = getExecutor(options);
-  const rawSchedule = (await executeAction("GetCurrentSchedule", {})) as RawSchedule | null;
+  const rawResponse = (await executeAction("GetCurrentSchedule", {})) as RawSchedule | RawSchedule[] | null;
+  const rawSchedule = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
+
   const rawScheduleItems = rawSchedule?.media_playlist;
   const rawItems = Array.isArray(rawScheduleItems)
     ? rawScheduleItems
     : ((await executeAction("GetMediaPlaylist", {})) as unknown[]);
   const items = normalizePlaylist(rawItems);
 
+  let schedule = normalizeSchedule(rawSchedule);
+
+  if (schedule && !schedule.name && schedule.type !== "temporary") {
+    try {
+      const eventName = (await executeAction("GetInterfaceInput", {
+        id: "main_selected_tab_event"
+      })) as RawInterfaceInput | null;
+
+      if (typeof eventName === "string" && eventName.trim()) {
+        schedule = {
+          type: schedule.type,
+          name: eventName.trim(),
+          datetime: schedule.datetime,
+          notes: schedule.notes,
+          eventId: schedule.eventId
+        };
+      }
+    } catch {
+      // Ignore errors from GetInterfaceInput
+    }
+  }
+
   return {
-    schedule: normalizeSchedule(rawSchedule),
+    schedule,
     items,
     groups: groupPlaylist(items)
   };
@@ -315,6 +370,47 @@ export async function presentSong(id: string, initialIndex = 0, options: Holyric
   await getExecutor(options)("ShowSong", { id, initial_index: initialIndex });
 }
 
+export async function getHolyricsImagePresentation(
+  id: string,
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<HolyricsImagePresentation> {
+  const executeAction = getExecutor(options);
+  await executeAction("MediaPlaylistAction", { id });
+
+  const raw = (await executeAction("GetCurrentPresentation", {
+    include_slides: true,
+    include_slide_preview: true,
+    slide_preview_size: "640x360"
+  })) as RawCurrentPresentation | null;
+
+  if (!raw) {
+    return { name: "", slides: [] };
+  }
+
+  const rawSlides = Array.isArray(raw.slides) ? (raw.slides as RawPresentationSlide[]) : [];
+
+  const slides = rawSlides.map((slide, fallbackIndex) => {
+    const number = typeof slide.number === "number" ? slide.number : fallbackIndex + 1;
+    const nameSource = asString(slide.slide_description) || asString(slide.text);
+    return {
+      index: number - 1,
+      name: nameSource || `Slide ${number}`,
+      thumbnail: typeof slide.preview === "string" && slide.preview.length > 0 ? slide.preview : null,
+      width: null,
+      height: null
+    };
+  });
+
+  return {
+    name: asString(raw.name),
+    slides
+  };
+}
+
 export async function goToPresentationIndex(index: number, options: HolyricsPlaylistServiceOptions = {}) {
   await getExecutor(options)("ActionGoToIndex", { index });
+}
+
+export async function stopPresentation(options: HolyricsPlaylistServiceOptions = {}) {
+  await getExecutor(options)("CloseCurrentPresentation", {});
 }
