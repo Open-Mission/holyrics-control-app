@@ -3,8 +3,11 @@ import { CheckCircle2, Settings, XCircle } from "lucide-react";
 
 import type { HolyricsConfigStatus } from "@holyrics-control/shared";
 
+import { HolyricsConnectionIndicator } from "@/components/HolyricsConnectionIndicator";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+
+const MOBILE_REFRESH_INTERVAL_MS = 60_000;
 
 const emptyStatus: HolyricsConfigStatus = {
   configured: false,
@@ -57,6 +60,8 @@ export function HomePage() {
         title="Holyrics Control"
         description="Base inicial para controle local do Holyrics em cultos, ensaios e operações da igreja."
       />
+
+      <HolyricsConnectionIndicator refreshIntervalMs={MOBILE_REFRESH_INTERVAL_MS} variant="mini" />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border bg-card p-4 shadow-sm">
