@@ -1,5 +1,6 @@
 node_modules
 dist
 .env
+.holyrics-config.json
 .DS_Store
 *.local

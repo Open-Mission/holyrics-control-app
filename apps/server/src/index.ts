@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import type { HealthStatus } from "@holyrics-control/shared";
 
+import { holyricsRoutes } from "./modules/holyrics/index.js";
+
 dotenv.config();
 
 const app = Fastify({
@@ -24,6 +26,10 @@ await app.register(cors, {
 
 await app.register(fastifyStatic, {
   root: webDistPath
+});
+
+await app.register(holyricsRoutes, {
+  prefix: "/api/holyrics"
 });
 
 app.get<{ Reply: HealthStatus }>("/api/health", async () => {
