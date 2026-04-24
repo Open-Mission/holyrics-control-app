@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, KeyRound, PlugZap, Save, Search, ShieldCheck, TestTube2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronRight,
+  KeyRound,
+  PlugZap,
+  Save,
+  Search,
+  ShieldCheck,
+  TestTube2,
+  XCircle
+} from "lucide-react";
 
 import type {
   HolyricsConfigStatus,
@@ -9,6 +19,7 @@ import type {
 
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 type RequestState = "idle" | "loading" | "success" | "error";
@@ -440,27 +451,32 @@ export function SettingsPage() {
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               {groupedPermissions.length > 0 ? (
                 groupedPermissions.map((group) => (
-                  <section key={group.title} className="rounded-lg border bg-card p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
+                  <Collapsible key={group.title} className="group/collapsible rounded-lg border bg-card">
+                    <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring">
+                      <div className="min-w-0">
                         <h3 className="text-sm font-semibold text-card-foreground">{group.title}</h3>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">{group.description}</p>
                       </div>
-                      <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-                        {group.items.length}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {group.items.map((permission) => (
-                        <span
-                          key={permission}
-                          className="rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground"
-                        >
-                          {permission}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
+                          {group.items.length}
                         </span>
-                      ))}
-                    </div>
-                  </section>
+                        <ChevronRight className="size-4 text-muted-foreground transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="flex flex-wrap gap-2 border-t px-3 py-3">
+                        {group.items.map((permission) => (
+                          <span
+                            key={permission}
+                            className="rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground"
+                          >
+                            {permission}
+                          </span>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 ))
               ) : (
                 <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
