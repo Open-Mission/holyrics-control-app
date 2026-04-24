@@ -1,14 +1,7 @@
-import { Home, MonitorPlay, Settings, SlidersHorizontal } from "lucide-react";
 import { NavLink } from "react-router";
 
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { to: "/", label: "Início", icon: Home },
-  { to: "/culto", label: "Culto", icon: MonitorPlay },
-  { to: "/admin", label: "Admin", icon: SlidersHorizontal },
-  { to: "/settings", label: "Ajustes", icon: Settings }
-];
+import { navItems } from "@/components/nav-items";
 
 export function MobileBottomNav() {
   return (
