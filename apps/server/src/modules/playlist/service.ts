@@ -1,10 +1,18 @@
 import type {
   HolyricsActiveSchedule,
+  HolyricsCurrentPresentationState,
+  HolyricsMediaDetail,
   HolyricsImagePresentation,
+  HolyricsMediaPlayerInfo,
   HolyricsMediaPlaylistItem,
   HolyricsMediaPlaylistResponse,
+  HolyricsPresentationModifierKey,
+  HolyricsPresentationItemType,
+  HolyricsPresentationModifiers,
+  HolyricsPresentationSlideType,
   HolyricsSongDetail,
-  HolyricsSongSection
+  HolyricsSongSection,
+  MediaPlayerActionRequest
 } from "@holyrics-control/shared";
 
 import { executeHolyricsAction } from "../holyrics/client.js";
@@ -51,6 +59,9 @@ type RawCurrentPresentation = {
   id?: unknown;
   type?: unknown;
   name?: unknown;
+  slide_number?: unknown;
+  total_slides?: unknown;
+  slide_type?: unknown;
   slides?: unknown;
 };
 
@@ -83,6 +94,33 @@ type RawSlide = {
   slide_description?: unknown;
 };
 
+type RawWrappedResponse<T> = {
+  data?: T;
+};
+
+type RawMediaFile = {
+  name?: unknown;
+  thumbnail?: unknown;
+  width?: unknown;
+  height?: unknown;
+  duration_ms?: unknown;
+  relative_path?: unknown;
+};
+
+type RawMediaPlayerInfo = RawMediaFile & {
+  path?: unknown;
+  playing?: unknown;
+  time_ms?: unknown;
+  time_elapsed?: unknown;
+  time_remaining?: unknown;
+  volume?: unknown;
+  mute?: unknown;
+  repeat?: unknown;
+  execute_single?: unknown;
+  shuffle?: unknown;
+  fullscreen?: unknown;
+};
+
 const executableTypes = new Set([
   "song",
   "verse",
@@ -107,8 +145,67 @@ const executableTypes = new Set([
   "module_action"
 ]);
 
+const presentationItemTypes = new Set<HolyricsPresentationItemType>([
+  "song",
+  "verse",
+  "text",
+  "audio",
+  "video",
+  "image",
+  "announcement",
+  "automatic_presentation",
+  "quick_presentation",
+  "unknown"
+]);
+
+const presentationSlideTypes = new Set<HolyricsPresentationSlideType>([
+  "default",
+  "wallpaper",
+  "blank",
+  "black",
+  "final_slide",
+  "unknown"
+]);
+
 function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
+}
+
+function unwrapResponse<T>(value: RawWrappedResponse<T> | T | null | undefined): T | null {
+  if (value && typeof value === "object" && "data" in value) {
+    return (value as RawWrappedResponse<T>).data ?? null;
+  }
+
+  return (value ?? null) as T | null;
+}
+
+function asNullableNumber(value: unknown) {
+  const unwrappedValue = unwrapResponse(value);
+  return typeof unwrappedValue === "number" ? unwrappedValue : null;
+}
+
+function asBoolean(value: unknown) {
+  return unwrapResponse(value) === true;
+}
+
+function normalizePresentationItemType(value: unknown): HolyricsPresentationItemType | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return presentationItemTypes.has(value as HolyricsPresentationItemType)
+    ? (value as HolyricsPresentationItemType)
+    : "unknown";
+}
+
+function normalizePresentationSlideType(value: unknown): HolyricsPresentationSlideType | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return presentationSlideTypes.has(value as HolyricsPresentationSlideType)
+    ? (value as HolyricsPresentationSlideType)
+    : "unknown";
 }
 
 function normalizeSchedule(raw: RawSchedule | null): HolyricsActiveSchedule | null {
@@ -130,7 +227,11 @@ function normalizeSchedule(raw: RawSchedule | null): HolyricsActiveSchedule | nu
   };
 }
 
-function normalizeItem(raw: RawPlaylistItem, index: number, title: string | null): HolyricsMediaPlaylistItem {
+function normalizeItem(
+  raw: RawPlaylistItem,
+  index: number,
+  title: string | null
+): HolyricsMediaPlaylistItem {
   const type = asString(raw.type, "unknown");
 
   return {
@@ -163,7 +264,9 @@ function normalizePlaylist(rawItems: unknown): HolyricsMediaPlaylistResponse["it
   });
 }
 
-function groupPlaylist(items: HolyricsMediaPlaylistItem[]): HolyricsMediaPlaylistResponse["groups"] {
+function groupPlaylist(
+  items: HolyricsMediaPlaylistItem[]
+): HolyricsMediaPlaylistResponse["groups"] {
   const groups: HolyricsMediaPlaylistResponse["groups"] = [];
 
   for (const item of items) {
@@ -192,7 +295,10 @@ export async function getHolyricsMediaPlaylist(
   options: HolyricsPlaylistServiceOptions = {}
 ): Promise<HolyricsMediaPlaylistResponse> {
   const executeAction = getExecutor(options);
-  const rawResponse = (await executeAction("GetCurrentSchedule", {})) as RawSchedule | RawSchedule[] | null;
+  const rawResponse = (await executeAction("GetCurrentSchedule", {})) as
+    | RawSchedule
+    | RawSchedule[]
+    | null;
   const rawSchedule = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
 
   const rawScheduleItems = rawSchedule?.media_playlist;
@@ -286,7 +392,9 @@ async function resolveSongByName(
   })) as RawSong[] | null;
   const resultList = Array.isArray(candidates) ? candidates : [];
   const normalizedTarget = trimmedName.toLowerCase();
-  const exact = resultList.find((item) => asString(item.title).trim().toLowerCase() === normalizedTarget);
+  const exact = resultList.find(
+    (item) => asString(item.title).trim().toLowerCase() === normalizedTarget
+  );
   const chosen = exact ?? resultList[0];
 
   if (!chosen) {
@@ -347,7 +455,9 @@ export async function getHolyricsSongDetail(
   const matchedById = lyricsPlaylist.find((item) => asString(item.id) === id);
   const matchedByName =
     songName && songName.trim()
-      ? lyricsPlaylist.find((item) => asString(item.title).trim().toLowerCase() === songName.trim().toLowerCase())
+      ? lyricsPlaylist.find(
+          (item) => asString(item.title).trim().toLowerCase() === songName.trim().toLowerCase()
+        )
       : null;
   const fallbackSong = matchedById ?? matchedByName ?? null;
 
@@ -362,11 +472,18 @@ export async function getHolyricsSongDetail(
   return normalizeSong(fallbackSong, id);
 }
 
-export async function presentMediaPlaylistItem(id: string, options: HolyricsPlaylistServiceOptions = {}) {
+export async function presentMediaPlaylistItem(
+  id: string,
+  options: HolyricsPlaylistServiceOptions = {}
+) {
   await getExecutor(options)("MediaPlaylistAction", { id });
 }
 
-export async function presentSong(id: string, initialIndex = 0, options: HolyricsPlaylistServiceOptions = {}) {
+export async function presentSong(
+  id: string,
+  initialIndex = 0,
+  options: HolyricsPlaylistServiceOptions = {}
+) {
   await getExecutor(options)("ShowSong", { id, initial_index: initialIndex });
 }
 
@@ -386,6 +503,7 @@ export async function getHolyricsImagePresentation(
   if (!raw) {
     return { name: "", slides: [] };
   }
+  console.log(raw);
 
   const rawSlides = Array.isArray(raw.slides) ? (raw.slides as RawPresentationSlide[]) : [];
 
@@ -395,7 +513,8 @@ export async function getHolyricsImagePresentation(
     return {
       index: number - 1,
       name: nameSource || `Slide ${number}`,
-      thumbnail: typeof slide.preview === "string" && slide.preview.length > 0 ? slide.preview : null,
+      thumbnail:
+        typeof slide.preview === "string" && slide.preview.length > 0 ? slide.preview : null,
       width: null,
       height: null
     };
@@ -407,18 +526,152 @@ export async function getHolyricsImagePresentation(
   };
 }
 
-export async function goToPresentationIndex(index: number, options: HolyricsPlaylistServiceOptions = {}) {
+export async function goToPresentationIndex(
+  index: number,
+  options: HolyricsPlaylistServiceOptions = {}
+) {
   await getExecutor(options)("ActionGoToIndex", { index });
 }
 
-export async function getCurrentSlideNumber(options: HolyricsPlaylistServiceOptions = {}): Promise<number | null> {
-  const raw = (await getExecutor(options)("GetCurrentPresentation", {})) as RawCurrentPresentation | null;
+export async function getCurrentSlideNumber(
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<number | null> {
+  const raw = (await getExecutor(options)(
+    "GetCurrentPresentation",
+    {}
+  )) as RawCurrentPresentation | null;
 
   if (!raw || typeof raw.slide_number !== "number") {
     return null;
   }
 
   return raw.slide_number - 1;
+}
+
+export async function getCurrentPresentationState(
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<HolyricsCurrentPresentationState> {
+  const raw = (await getExecutor(options)("GetCurrentPresentation", {})) as
+    | RawWrappedResponse<RawCurrentPresentation>
+    | RawCurrentPresentation
+    | null;
+  const data = unwrapResponse(raw);
+
+  return {
+    id: data && typeof data.id === "string" ? data.id : null,
+    type: normalizePresentationItemType(data?.type),
+    name: data && typeof data.name === "string" ? data.name : null,
+    slideNumber: data && typeof data.slide_number === "number" ? data.slide_number - 1 : null,
+    totalSlides: data && typeof data.total_slides === "number" ? data.total_slides : null,
+    slideType: normalizePresentationSlideType(data?.slide_type)
+  };
+}
+
+export async function getPresentationModifiers(
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<HolyricsPresentationModifiers> {
+  const executeAction = getExecutor(options);
+
+  const wallpaper = await executeAction("GetF8", {});
+  const blank = await executeAction("GetF9", {});
+  const black = await executeAction("GetF10", {});
+
+  return {
+    wallpaper: asBoolean(wallpaper),
+    blank: asBoolean(blank),
+    black: asBoolean(black)
+  };
+}
+
+export async function setPresentationModifier(
+  key: HolyricsPresentationModifierKey,
+  enable: boolean,
+  options: HolyricsPlaylistServiceOptions = {}
+) {
+  const actionByKey = {
+    wallpaper: "SetF8",
+    blank: "SetF9",
+    black: "SetF10"
+  } satisfies Record<HolyricsPresentationModifierKey, string>;
+
+  await getExecutor(options)(actionByKey[key], { enable });
+}
+
+type SupportedMediaDetailType = "image" | "video" | "audio" | "file";
+
+export async function getHolyricsMediaDetail(
+  type: SupportedMediaDetailType,
+  name: string,
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<HolyricsMediaDetail> {
+  const actionByType = {
+    image: "GetImage",
+    video: "GetVideo",
+    audio: "GetAudio",
+    file: "GetFile"
+  } satisfies Record<SupportedMediaDetailType, string>;
+
+  const raw = (await getExecutor(options)(actionByType[type], {
+    name,
+    include_metadata: true,
+    include_thumbnail: true
+  })) as RawWrappedResponse<RawMediaFile> | RawMediaFile | null;
+  const data = unwrapResponse(raw);
+
+  return {
+    type,
+    name: asString(data?.name, name),
+    thumbnail: typeof data?.thumbnail === "string" ? data.thumbnail : null,
+    width: asNullableNumber(data?.width),
+    height: asNullableNumber(data?.height),
+    durationMs: asNullableNumber(data?.duration_ms),
+    relativePath: typeof data?.relative_path === "string" ? data.relative_path : null
+  };
+}
+
+export async function getHolyricsMediaPlayerInfo(
+  options: HolyricsPlaylistServiceOptions = {}
+): Promise<HolyricsMediaPlayerInfo> {
+  const raw = (await getExecutor(options)("GetMediaPlayerInfo", {})) as
+    | RawWrappedResponse<RawMediaPlayerInfo>
+    | RawMediaPlayerInfo
+    | null;
+  const data = unwrapResponse(raw);
+
+  return {
+    name: asString(data?.name),
+    path: asString(data?.path) || null,
+    relativePath: asString(data?.relative_path) || null,
+    playing: asBoolean(data?.playing),
+    durationMs: asNullableNumber(data?.duration_ms),
+    timeMs: asNullableNumber(data?.time_ms),
+    timeElapsed: asString(data?.time_elapsed) || null,
+    timeRemaining: asString(data?.time_remaining) || null,
+    volume: asNullableNumber(data?.volume),
+    mute: asBoolean(data?.mute),
+    repeat: asBoolean(data?.repeat),
+    executeSingle: asBoolean(data?.execute_single),
+    shuffle: asBoolean(data?.shuffle),
+    fullscreen: asBoolean(data?.fullscreen)
+  };
+}
+
+export async function mediaPlayerAction(
+  payload: MediaPlayerActionRequest,
+  options: HolyricsPlaylistServiceOptions = {}
+) {
+  const body: Record<string, unknown> = {};
+
+  if (payload.action) body.action = payload.action;
+  if (typeof payload.volume === "number") body.volume = payload.volume;
+  if (typeof payload.mute === "boolean") body.mute = payload.mute;
+  if (typeof payload.repeat === "boolean") body.repeat = payload.repeat;
+  if (typeof payload.shuffle === "boolean") body.shuffle = payload.shuffle;
+  if (typeof payload.executeSingle === "boolean") body.execute_single = payload.executeSingle;
+  if (typeof payload.fullscreen === "boolean") body.fullscreen = payload.fullscreen;
+  if (typeof payload.timeMs === "number") body.time_ms = payload.timeMs;
+
+  await getExecutor(options)("MediaPlayerAction", body);
 }
 
 export async function stopPresentation(options: HolyricsPlaylistServiceOptions = {}) {

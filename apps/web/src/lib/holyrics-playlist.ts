@@ -1,11 +1,18 @@
 import type {
   GoToPresentationIndexRequest,
+  HolyricsCurrentPresentationState,
   HolyricsImagePresentation,
+  HolyricsMediaDetail,
+  HolyricsMediaPlayerInfo,
   HolyricsMediaPlaylistItemType,
   HolyricsMediaPlaylistResponse,
+  HolyricsPresentationModifierKey,
+  HolyricsPresentationModifiers,
   HolyricsSongDetail,
+  MediaPlayerActionRequest,
   PresentAndPreviewImageRequest,
   PresentMediaPlaylistItemRequest,
+  PresentationModifierRequest,
   PresentSongRequest
 } from "@holyrics-control/shared";
 
@@ -49,11 +56,33 @@ export async function fetchHolyricsMediaPlaylist(fetcher: typeof fetch = fetch) 
   return readJsonResponse<HolyricsMediaPlaylistResponse>(response);
 }
 
+export async function fetchCurrentPresentationState(fetcher: typeof fetch = fetch) {
+  const response = await fetcher("/api/holyrics/presentation/state");
+  return readJsonResponse<HolyricsCurrentPresentationState>(response);
+}
+
+export async function fetchPresentationModifiers(fetcher: typeof fetch = fetch) {
+  const response = await fetcher("/api/holyrics/presentation/modifiers");
+  return readJsonResponse<HolyricsPresentationModifiers>(response);
+}
+
 export async function fetchHolyricsSongDetail(id: string, songName?: string, fetcher: typeof fetch = fetch) {
   const path = `/api/holyrics/songs/${encodeURIComponent(id)}`;
   const query = songName && songName.trim() ? `?name=${encodeURIComponent(songName)}` : "";
   const response = await fetcher(`${path}${query}`);
   return readJsonResponse<HolyricsSongDetail>(response);
+}
+
+export async function setHolyricsPresentationModifier(
+  key: HolyricsPresentationModifierKey,
+  enable: boolean,
+  fetcher: typeof fetch = fetch
+) {
+  await postJson<PresentationModifierRequest>(
+    "/api/holyrics/presentation/modifiers",
+    { key, enable },
+    fetcher
+  );
 }
 
 export async function presentAndPreviewHolyricsImage(id: string, fetcher: typeof fetch = fetch) {
@@ -74,6 +103,30 @@ export async function presentHolyricsSong(id: string, initialIndex = 0, fetcher:
   await postJson<PresentSongRequest>("/api/holyrics/songs/present", { id, initialIndex }, fetcher);
 }
 
+type SupportedHolyricsMediaDetailType = "image" | "video" | "audio" | "file";
+
+export async function fetchHolyricsMediaDetail(
+  type: SupportedHolyricsMediaDetailType,
+  name: string,
+  fetcher: typeof fetch = fetch
+) {
+  const query = new URLSearchParams({ type, name });
+  const response = await fetcher(`/api/holyrics/media/detail?${query.toString()}`);
+  return readJsonResponse<HolyricsMediaDetail>(response);
+}
+
+export async function fetchHolyricsMediaPlayerInfo(fetcher: typeof fetch = fetch) {
+  const response = await fetcher("/api/holyrics/media/player");
+  return readJsonResponse<HolyricsMediaPlayerInfo>(response);
+}
+
+export async function mediaPlayerAction(
+  body: MediaPlayerActionRequest,
+  fetcher: typeof fetch = fetch
+) {
+  await postJson<MediaPlayerActionRequest>("/api/holyrics/media/player/action", body, fetcher);
+}
+
 export async function goToHolyricsPresentationIndex(index: number, fetcher: typeof fetch = fetch) {
   await postJson<GoToPresentationIndexRequest>("/api/holyrics/presentation/goto-index", { index }, fetcher);
 }
@@ -88,7 +141,7 @@ export async function getCurrentSlide(fetcher: typeof fetch = fetch) {
 }
 
 export function getSongPresentationIndex(sectionIndex: number) {
-  return sectionIndex;
+  return sectionIndex + 1;
 }
 
 export function getImagePresentationIndex(slideIndex: number) {

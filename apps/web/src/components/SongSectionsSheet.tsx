@@ -1,7 +1,13 @@
 import { Loader2, Mic2, Play, SkipForward } from "lucide-react";
 
-import type { HolyricsMediaPlaylistItem, HolyricsSongDetail } from "@holyrics-control/shared";
+import type {
+  HolyricsMediaPlaylistItem,
+  HolyricsPresentationModifierKey,
+  HolyricsPresentationModifiers,
+  HolyricsSongDetail
+} from "@holyrics-control/shared";
 
+import { MediaPresentationControls } from "@/components/MediaPresentationControls";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -20,10 +26,14 @@ type SongSectionsSheetProps = {
   presenting: boolean;
   presentationActive: boolean;
   currentSlide: number | null;
+  modifiers: HolyricsPresentationModifiers;
+  pendingModifier: HolyricsPresentationModifierKey | null;
+  optimisticSectionIndex: number | null;
   error: string | null;
   onOpenChange: (open: boolean) => void;
   onPresentSong: () => void;
   onGoToSection: (index: number) => void;
+  onToggleModifier: (key: HolyricsPresentationModifierKey, enable: boolean) => void;
 };
 
 export function SongSectionsSheet({
@@ -35,10 +45,14 @@ export function SongSectionsSheet({
   presenting,
   presentationActive,
   currentSlide,
+  modifiers,
+  pendingModifier,
+  optimisticSectionIndex,
   error,
   onOpenChange,
   onPresentSong,
-  onGoToSection
+  onGoToSection,
+  onToggleModifier
 }: SongSectionsSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -53,6 +67,13 @@ export function SongSectionsSheet({
               : "Carregando letra do Holyrics"}
           </SheetDescription>
         </SheetHeader>
+
+        {song ? (
+          <p className="px-5 pb-2 text-xs text-muted-foreground">
+            Holyrics abre primeiro slide vazio com nome da musica. Blocos abaixo usam indice real
+            +1.
+          </p>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto px-5 pb-5">
           {loading ? (
@@ -70,6 +91,12 @@ export function SongSectionsSheet({
 
           {song ? (
             <div className="space-y-3">
+              <MediaPresentationControls
+                modifiers={modifiers}
+                onToggle={onToggleModifier}
+                pendingKey={pendingModifier}
+              />
+
               <Button
                 className="w-full"
                 disabled={presenting || presentationActive}
@@ -91,16 +118,24 @@ export function SongSectionsSheet({
               ) : null}
 
               {song.sections.map((section) => {
-                const isPending = pendingIndex === section.index + 1;
-                const isActive = isPending || currentSlide === section.index + 1;
+                const sectionPresentationIndex = section.index;
+                const isPending = pendingIndex === sectionPresentationIndex;
+                const isActive =
+                  isPending ||
+                  optimisticSectionIndex === sectionPresentationIndex ||
+                  currentSlide === sectionPresentationIndex;
 
                 return (
                   <button
                     className="w-full rounded-lg border bg-card p-4 text-left shadow-sm transition hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-ring"
                     disabled={pendingIndex !== null}
                     key={section.index}
-                    onClick={() => onGoToSection(section.index + 1)}
-                    style={isActive ? { borderColor: "var(--primary)", outline: "2px solid var(--primary)" } : undefined}
+                    onClick={() => onGoToSection(sectionPresentationIndex)}
+                    style={
+                      isActive
+                        ? { borderColor: "var(--primary)", outline: "2px solid var(--primary)" }
+                        : undefined
+                    }
                     type="button"
                   >
                     <div className="flex items-center justify-between gap-3">

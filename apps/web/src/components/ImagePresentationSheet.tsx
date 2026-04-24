@@ -1,8 +1,20 @@
 import { ImageIcon, Loader2, Play, SkipForward } from "lucide-react";
 
-import type { HolyricsImagePresentation, HolyricsMediaPlaylistItem } from "@holyrics-control/shared";
+import type {
+  HolyricsImagePresentation,
+  HolyricsMediaPlaylistItem,
+  HolyricsPresentationModifierKey,
+  HolyricsPresentationModifiers
+} from "@holyrics-control/shared";
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { MediaPresentationControls } from "@/components/MediaPresentationControls";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 
 type ImagePresentationSheetProps = {
   item: HolyricsMediaPlaylistItem | null;
@@ -11,9 +23,12 @@ type ImagePresentationSheetProps = {
   loading: boolean;
   pendingIndex: number | null;
   activeIndex: number | null;
+  modifiers: HolyricsPresentationModifiers;
+  pendingModifier: HolyricsPresentationModifierKey | null;
   error: string | null;
   onOpenChange: (open: boolean) => void;
   onShowSlide: (index: number) => void;
+  onToggleModifier: (key: HolyricsPresentationModifierKey, enable: boolean) => void;
 };
 
 function getThumbnailSrc(thumbnail: string | null) {
@@ -35,10 +50,14 @@ export function ImagePresentationSheet({
   loading,
   pendingIndex,
   activeIndex,
+  modifiers,
+  pendingModifier,
   error,
   onOpenChange,
-  onShowSlide
+  onShowSlide,
+  onToggleModifier
 }: ImagePresentationSheetProps) {
+  console.log(item, image);
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="md:max-w-2xl">
@@ -69,6 +88,12 @@ export function ImagePresentationSheet({
 
           {image ? (
             <div className="space-y-3">
+              <MediaPresentationControls
+                modifiers={modifiers}
+                onToggle={onToggleModifier}
+                pendingKey={pendingModifier}
+              />
+
               {image.slides.length === 0 ? (
                 <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
                   O Holyrics nao retornou imagens para este item.
@@ -85,7 +110,11 @@ export function ImagePresentationSheet({
                     disabled={pendingIndex !== null}
                     key={`${slide.name}-${slide.index}`}
                     onClick={() => onShowSlide(slide.index)}
-                    style={isActive ? { borderColor: "var(--primary)", outline: "2px solid var(--primary)" } : undefined}
+                    style={
+                      isActive
+                        ? { borderColor: "var(--primary)", outline: "2px solid var(--primary)" }
+                        : undefined
+                    }
                     type="button"
                   >
                     {thumbnailSrc ? (
@@ -101,7 +130,9 @@ export function ImagePresentationSheet({
                     )}
                     <div className="flex items-center justify-between gap-3 p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-card-foreground">{slide.name}</p>
+                        <p className="truncate text-sm font-semibold text-card-foreground">
+                          {slide.name}
+                        </p>
                         {slide.width && slide.height ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             {slide.width} x {slide.height}
