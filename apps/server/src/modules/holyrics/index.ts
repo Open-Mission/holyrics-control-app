@@ -12,10 +12,12 @@ import {
 } from "./config.js";
 import {
   getHolyricsMediaPlaylist,
+  getHolyricsImagePresentation,
   getHolyricsSongDetail,
   goToPresentationIndex,
   presentMediaPlaylistItem,
-  presentSong
+  presentSong,
+  stopPresentation
 } from "../playlist/service.js";
 
 type HolyricsTokenInfoResponse = {
@@ -144,6 +146,18 @@ export const holyricsRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  app.post("/images/present-and-preview", async (request, reply) => {
+    if (!hasStringId(request.body)) {
+      return reply.code(400).send({ error: "Informe o ID do item da playlist." });
+    }
+
+    try {
+      return await getHolyricsImagePresentation(request.body.id);
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
   app.post("/media-playlist/present", async (request, reply) => {
     if (!hasStringId(request.body)) {
       return reply.code(400).send({ error: "Informe o ID do item da playlist." });
@@ -177,6 +191,15 @@ export const holyricsRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       await goToPresentationIndex(request.body.index);
+      return { ok: true };
+    } catch (error) {
+      return reply.code(502).send({ error: errorMessage(error) });
+    }
+  });
+
+  app.post("/presentation/stop", async (_request, reply) => {
+    try {
+      await stopPresentation();
       return { ok: true };
     } catch (error) {
       return reply.code(502).send({ error: errorMessage(error) });
