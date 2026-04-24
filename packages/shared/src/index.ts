@@ -69,6 +69,7 @@ export type HolyricsActiveSchedule = {
   name: string;
   datetime: string | null;
   notes: string;
+  eventId: string | null;
 };
 
 export type HolyricsMediaPlaylistResponse = {
@@ -105,4 +106,21 @@ export type HolyricsSongDetail = {
 
 export type GoToPresentationIndexRequest = {
   index: number;
+};
+
+export type HolyricsImageSlide = {
+  index: number;
+  name: string;
+  thumbnail: string | null;
+  width: number | null;
+  height: number | null;
+};
+
+export type HolyricsImagePresentation = {
+  name: string;
+  slides: HolyricsImageSlide[];
+};
+
+export type PresentAndPreviewImageRequest = {
+  id: string;
 };
